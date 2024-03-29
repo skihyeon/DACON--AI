@@ -1,3 +1,6 @@
 /datas
 /anomaly
 /submits
+/wandb
+/model_files
+/__pycache__
