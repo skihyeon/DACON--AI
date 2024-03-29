@@ -4,3 +4,4 @@
 /wandb
 /model_files
 /__pycache__
+/tmp.py
