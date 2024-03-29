@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torchvision import models
 from tqdm.auto import tqdm
 
 from config import Config
@@ -15,6 +13,7 @@ def train(model,
           train_loader, 
           criterion, 
           optimizer, 
+          scheduler,  
           num_epochs, 
           device,
           wandb,
@@ -44,7 +43,9 @@ def train(model,
             best_model_scripted = torch.jit.script(model)
             torch.jit.save(best_model_scripted, model_save_path)
             best_model = best_model_scripted
-    
+        
+        scheduler.step() 
+
     return best_model
 
 def main():
@@ -60,11 +61,13 @@ def main():
     
     criterion = nn.MSELoss()
     optimizer = optim.AdamW(autoencoder.parameters(), lr=config.learning_rate)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma) 
     
     best_model = train(autoencoder, 
                        train_loader, 
                        criterion, 
                        optimizer, 
+                       scheduler,
                        config.num_epochs, 
                        device,
                        wandb,
