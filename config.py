@@ -9,5 +9,6 @@ class Config:
     project_name = "Segment_Anomaly_Detection"
     entity_name = "hero981001"
     train_csv = './datas/train.csv'
+    test_csv = './datas/test.csv'
     model_save_path = './model_files/AE_v3.pt'
     
