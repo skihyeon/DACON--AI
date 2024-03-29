@@ -4,76 +4,137 @@ import torch.optim as optim
 from tqdm.auto import tqdm
 
 from config import Config
-from utils import seed_everything
+from utils import seed_everything, weights_init_normal, wandb_login
 from data_loader import get_train_loader
-from autoencoder import AutoEncoder
-from wandb_utils import wandb_init
+from deepSVDD import deepSVDD, C_AE
 
-def train(model, 
-          train_loader, 
-          criterion, 
-          optimizer, 
-          scheduler,  
-          num_epochs, 
-          device,
-          wandb,
-          model_save_path):
-    model.train()
-    best_loss = float('inf')
-    best_model = None
+
+
+class Trainer:
+    def __init__(self, config, dataloader, wandb):
+        self.config = config
+        self.train_loader = dataloader
+        self.device = config.general.device
+        self.wandb = wandb
+
+    def pretrain(self):
+        self.wandb.init(project=self.config.general.project_name_pt, entity=self.config.general.entity_name)
+
+        AE = C_AE(self.config.model.C_AE.latent_dim).to(self.device)
+        AE.apply(weights_init_normal)
+        optimizer = optim.Adam(AE.parameters(), lr = self.config.model.C_AE.lr,
+                               weight_decay=self.config.model.C_AE.weight_decay)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=self.config.model.C_AE.step_size, gamma=self.config.model.C_AE.gamma)
+
+        AE.train()
+        epochs = self.config.model.C_AE.num_epochs
+        for epoch in tqdm(range(epochs), total=epochs, desc="Epoch"):
+            total_loss = 0
+            for x, _ in self.train_loader:
+                x = x.float().to(self.device)
+
+                optimizer.zero_grad()
+                x_hat = AE(x)
+                reconst_loss = torch.mean(torch.sum((x_hat-x)**2, dim=tuple(range(1, x_hat.dim()))))
+                reconst_loss.backward()
+                optimizer.step()
+
+                total_loss += reconst_loss.item()
+            
+            avg_loss = total_loss / len(self.train_loader)
+            self.wandb.log({"epoch": epoch, "loss": avg_loss, "lr": scheduler.get_last_lr()[0] })
+
+            tqdm.write(f'Pretraining Autoencoder... Epoch: {epoch}, Loss: {avg_loss:.3f}')
+            scheduler.step()
+            
+        self.save_weights_for_deepSVDD(AE, self.train_loader)
+        self.wandb.finish()
+
+    def save_weights_for_deepSVDD(self, model, dataloader):
+        c = self.set_c(model, dataloader)
+        net = deepSVDD(self.config.model.C_AE.latent_dim).to(self.device)
+        state_dict = model.state_dict()
+        net.load_state_dict(state_dict, strict=False)
+        torch.save({'center': c.cpu().data.numpy().tolist(),
+                    'net_dict': net.state_dict()}, self.config.model.C_AE.save_path)
+        
+    def set_c(self, model, dataloader, eps=0.1):
+        model.eval()
+        z_ = []
+        with torch.no_grad():
+            for x, _ in dataloader:
+                x = x.float().to(self.device)
+                z = model.encoder(x)
+                z_.append(z.detach())
+        z_ = torch.cat(z_)
+        c = torch.mean(z_, dim=0)
+        c[(abs(c) < eps) & (c < 0)] = -eps
+        c[(abs(c) < eps) & (c > 0)] = eps
+        return c
     
-    for epoch in tqdm(range(num_epochs), total=num_epochs, desc="Epoch"):
-        total_loss = 0
-        for images, _ in train_loader:
-            images = images.to(device)
-            optimizer.zero_grad()
-            reconstructed = model(images)
-            loss = criterion(reconstructed, images)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        
-        avg_loss = total_loss / len(train_loader)
-        
-        wandb.log({"epoch": epoch, "loss": avg_loss})
-        
-        tqdm.write(f"Epoch {epoch+1}: Avg Loss: {avg_loss:.4f}")
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            best_model_scripted = torch.jit.script(model)
-            torch.jit.save(best_model_scripted, model_save_path)
-            best_model = best_model_scripted
-        
-        scheduler.step() 
+    def train(self):
+        net = deepSVDD(self.config.model.C_AE.latent_dim).to(self.device)
 
-    return best_model
+        if self.config.model.deepSVDD.pretrained == True:
+            state_dict = torch.load(self.config.model.deepSVDD.pretrained_path)
+            net.load_state_dict(state_dict['net_dict'])
+            c = torch.Tensor(state_dict['center']).to(self.device)
+        else:
+            net.apply(weights_init_normal)
+            c = torch.randn(self.config.model.C_AE.latent_dim).to(self.device)
+        
+        optimizer = optim.Adam(net.parameters(), lr=self.config.model.deepSVDD.lr,
+                               weight_decay=self.config.model.deepSVDD.weight_decay)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=self.config.model.deepSVDD.step_size, gamma = self.config.model.deepSVDD.gamma)
+        
+        net.train()
+        
+        self.wandb.init(project=self.config.general.project_name, entity=self.config.general.entity_name)
+
+        best_loss = float('inf')
+        epochs = self.config.model.deepSVDD.num_epochs
+        
+        for epoch in tqdm(range(epochs), total=epochs, desc="Epoch"):
+            total_loss = 0
+            for x, _ in self.train_loader:
+                x = x.float().to(self.device)
+
+                optimizer.zero_grad()
+                z = net(x)
+                loss = torch.mean(torch.sum((z-c) ** 2, dim=1))
+                loss.backward()
+                optimizer.step()
+
+                total_loss += loss.item()
+
+            avg_loss = total_loss/len(self.train_loader) 
+            self.wandb.log({"epoch": epoch, "loss": avg_loss, "lr":scheduler.get_last_lr()[0]})
+            tqdm.write(f'Training Deep SVDD... Epoch: {epoch}, Loss: {avg_loss:.3f}')
+            
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                best_model = torch.jit.script(net)
+                torch.jit.save(best_model, self.config.train.model_save_path)
+            
+            scheduler.step()
+            
+        self.net = net
+        self.c = c
+
 
 def main():
     config = Config()
-    seed_everything(config.seed)
-    device = torch.device(config.device if torch.cuda.is_available() else "cpu")
+    seed_everything(config.general.seed)
+    wandb = wandb_login()
+
+    train_loader = get_train_loader(config.train.train_csv, config.train.load_batch_size)
+
+    trainer = Trainer(config, train_loader, wandb)
+
+    if config.model.deepSVDD.pretrained == True:
+        trainer.pretrain()
     
-    wandb = wandb_init(config.project_name, config.entity_name)
-    
-    train_loader = get_train_loader(config.train_csv, config.batch_size)
-    
-    autoencoder = AutoEncoder().to(device) 
-    
-    criterion = nn.MSELoss()
-    optimizer = optim.AdamW(autoencoder.parameters(), lr=config.learning_rate)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma) 
-    
-    best_model = train(autoencoder, 
-                       train_loader, 
-                       criterion, 
-                       optimizer, 
-                       scheduler,
-                       config.num_epochs, 
-                       device,
-                       wandb,
-                       model_save_path=config.model_save_path)
-    
-    wandb.finish()
+    trainer.train()
 
 if __name__ == "__main__":
     main()
