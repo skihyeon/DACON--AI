@@ -18,4 +18,6 @@ class CustomDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         target = torch.tensor([0.]).float()
-        return image, target
+        label = self.df['label'].iloc[idx]
+        # return image, target
+        return image, label

@@ -27,6 +27,9 @@ class Trainer:
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=self.config.model.C_AE.step_size, gamma=self.config.model.C_AE.gamma)
 
         AE.train()
+
+        loss_func = nn.MSELoss()
+        best_loss = float('inf')
         epochs = self.config.model.C_AE.num_epochs
         for epoch in tqdm(range(epochs), total=epochs, desc="Epoch"):
             total_loss = 0
@@ -35,7 +38,8 @@ class Trainer:
 
                 optimizer.zero_grad()
                 x_hat = AE(x)
-                reconst_loss = torch.mean(torch.sum((x_hat-x)**2, dim=tuple(range(1, x_hat.dim()))))
+                # reconst_loss = torch.mean(torch.sum((x_hat-x)**2, dim=tuple(range(1, x_hat.dim()))))
+                reconst_loss = loss_func(x_hat, x)
                 reconst_loss.backward()
                 optimizer.step()
 
@@ -45,6 +49,13 @@ class Trainer:
             self.wandb.log({"epoch": epoch, "loss": avg_loss, "lr": scheduler.get_last_lr()[0] })
 
             tqdm.write(f'Pretraining Autoencoder... Epoch: {epoch}, Loss: {avg_loss:.3f}')
+
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                best_model = torch.jit.script(AE)
+                torch.jit.save(best_model, self.config.model.C_AE.save_model_path)
+                # print(f"model saved to {self.config.model.C_AE.save_model_path}")
+
             scheduler.step()
             
         self.save_weights_for_deepSVDD(AE, self.train_loader)
@@ -56,7 +67,7 @@ class Trainer:
         state_dict = model.state_dict()
         net.load_state_dict(state_dict, strict=False)
         torch.save({'center': c.cpu().data.numpy().tolist(),
-                    'net_dict': net.state_dict()}, self.config.model.C_AE.save_path)
+                    'net_dict': net.state_dict()}, self.config.model.C_AE.save_params_path)
         
     def set_c(self, model, dataloader, eps=0.1):
         model.eval()
@@ -93,7 +104,7 @@ class Trainer:
 
         best_loss = float('inf')
         epochs = self.config.model.deepSVDD.num_epochs
-        
+        # loss_func = nn.MSELoss()
         for epoch in tqdm(range(epochs), total=epochs, desc="Epoch"):
             total_loss = 0
             for x, _ in self.train_loader:
@@ -102,6 +113,7 @@ class Trainer:
                 optimizer.zero_grad()
                 z = net(x)
                 loss = torch.mean(torch.sum((z-c) ** 2, dim=1))
+                # loss = loss_func(z, c)
                 loss.backward()
                 optimizer.step()
 
