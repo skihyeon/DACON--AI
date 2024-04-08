@@ -1,6 +1,6 @@
 import torch
 
-name = "gpu"
+name = "gpu_z_64"
 
 class Config:
     class general:
@@ -23,15 +23,15 @@ class Config:
         class deepSVDD:
             pretrained = True
             pretrained_path = f'./model_files/deepSVDD/pretrained_params_{name}.pth'
-            num_epochs=50
-            lr=1e-4
+            num_epochs=100
+            lr=1e-3
             weight_decay=0.5e-6
             pretrain=True
             step_size = 20
             gamma = 0.1
         
         class C_AE:
-            latent_dim = 2048
+            latent_dim = 64
             num_epochs = 100
             weight_decay = 0.5e-3
             lr = 1e-3
