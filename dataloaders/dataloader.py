@@ -36,8 +36,8 @@ def global_contrast_normalization(x):
 def get_molding_loader(csv_file, batch_size, shuffle=True):
     transform = transforms.Compose([
                  transforms.Resize((256, 512)),
-                 transforms.CenterCrop((230, 280)),
-                 transforms.Lambda(lambda image: crop_by_pixels(image, 30, 0)), # 200x280
+                 transforms.CenterCrop((254, 320)),
+                 transforms.Lambda(lambda image: crop_by_pixels(image, 30, 0)), # 224 x 320
                  transforms.ToTensor(),
                  transforms.Lambda(lambda image: global_contrast_normalization(image)),
                  transforms.Lambda(lambda image: TF.adjust_contrast(image, contrast_factor=2)),
@@ -50,9 +50,9 @@ def get_molding_loader(csv_file, batch_size, shuffle=True):
 
 def get_leadframe_loader(csv_file, batch_size, shuffle=True):
     transform = transforms.Compose([
-                 transforms.Resize((256,512)),
-                 transforms.CenterCrop((254,300)),
-                 transforms.Lambda(lambda image:crop_by_pixels(image, 0, 50)), # 204x300
+                 transforms.Resize((256, 512)),
+                 transforms.CenterCrop((254,320)),
+                 transforms.Lambda(lambda image:crop_by_pixels(image, 0, 30)), # 224x320
                  transforms.Grayscale(num_output_channels=1),
                  transforms.ToTensor(),
                  transforms.Normalize(mean=[0.406], std=[0.225])

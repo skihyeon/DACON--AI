@@ -43,7 +43,8 @@ class Trainer:
 
                     optimizer.zero_grad()
                     reconstructed = AE(imgs)
-                    loss = torch.mean(torch.sum((reconstructed - imgs) ** 2, dim=tuple(range(1, reconstructed.dim()))))
+                    scores = torch.sum((reconstructed - imgs) ** 2, dim=tuple(range(1, reconstructed.dim())))
+                    loss = torch.mean(scores)
                     # loss = loss_func(reconstructed, imgs)
                     loss.backward()
                     optimizer.step()
