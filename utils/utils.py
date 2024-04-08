@@ -25,4 +25,16 @@ def weights_init_normal(m):
         torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
     elif classname.find("Linear") != -1:
         torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
-        
+
+def update_wandb_config(wandb, config_class, prefix=''):
+    for attribute_name in dir(config_class):
+        if attribute_name.startswith('__'):
+            continue
+        attribute_value = getattr(config_class, attribute_name)
+
+        # 서브클래스를 돌며 재귀적으로 처리
+        if isinstance(attribute_value, type):
+            update_wandb_config(wandb, attribute_value, prefix=f"{prefix}{attribute_name}_")
+        else:
+            config_key = f"{prefix}{attribute_name}"
+            setattr(wandb.config, config_key, attribute_value)

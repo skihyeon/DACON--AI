@@ -1,14 +1,57 @@
 class Config:
-    seed = 456
-    batch_size = 64
-    num_epochs = 1000
-    learning_rate = 0.01
-    step_size = 10
-    gamma = 0.5
-    device = "cuda"
-    project_name = "Segment_Anomaly_Detection"
-    entity_name = "hero981001"
-    train_csv = './datas/train.csv'
-    test_csv = './datas/test.csv'
-    model_save_path = './model_files/AE_v3.pt'
+
+    class wandb:
+        entity = 'hero981001'
+        project_name = 'deepSVDD_split'
+        run_name = 'v1'
+    class pretrain_molding:
+        run_name = 'pretrain_molding'
+        z_dim = 512
+        lr = 0.001
+        weight_decay = 0.005
+        step_size = 10
+        gamma = 0.1
+        epochs = 100
+        save_path = './model_files/deepSVDD_split/'
+        save_model_path = save_path + f'{run_name}.pt'
     
+    class pretrain_leadframe:
+        run_name = 'pretrain_leadframe'
+        z_dim = 512
+        lr = 0.001
+        weight_decay = 0.005
+        step_size = 10
+        gamma = 0.1
+        epochs = 100
+        save_path = './model_files/deepSVDD_split/'
+        save_model_path = save_path + f'{run_name}.pt'
+    
+    class train_molding:
+        run_name = 'train_molding'
+        z_dim = 512
+        param_path = './model_files/deepSVDD_split/params_molding.pth'
+        pretrained = True
+        lr = 0.001
+        weight_decay =0.005
+        step_size = 10
+        gamma = 0.1
+        epochs = 100
+        save_path = './model_files/deepSVDD_split/'
+        save_model_path = save_path + f'{run_name}.pt'
+        img_path = './datas/train_molding.csv'
+        batch_size = 64
+    
+    class train_leadframe:
+        run_name = 'train_leadframe'
+        z_dim = 512
+        param_path = './model_files/deepSVDD_split/params_leadframe.pt'
+        pretrained = True
+        lr = 0.001
+        weight_decay =0.005
+        step_size = 10
+        gamma = 0.1
+        epochs = 100
+        save_path = './model_files/deepSVDD_split/'
+        save_model_path = save_path + f'{run_name}.pt'
+        img_path = './datas/train_leadframe.csv'
+        batch_size = 64
