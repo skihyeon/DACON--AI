@@ -14,7 +14,7 @@ def split_image(img_path, split_ratio, molding_path, leadframe_path):
     top.save(molding_path+'/'+img_path.split('/')[-1].split('.')[0]+'_molding.png')
     bot.save(leadframe_path+'/'+img_path.split('/')[-1].split('.')[0]+'_leadframe.png')
 
-def list_png_images(dir, train=True):
+def list_png_images(dir, train=True, labels = None):
     files = os.listdir(dir)
     idx = [num.split('.')[0] for num in files]
     img_path = [dir + '/' + num for num in files]
@@ -28,6 +28,9 @@ def list_png_images(dir, train=True):
     if train == True:
         result_df['label'] = 0
     
+    if train == False:
+        result_df['label'] = labels
+
     return result_df
     
 
@@ -55,11 +58,12 @@ if __name__=="__main__":
     os.makedirs(test_molding_path, exist_ok=True)
     os.makedirs(test_leadframe_path, exist_ok=True)
 
+    test_labels = pd.read_csv('./datas/test.csv')['label']
     for i in test_data_path:
         split_image(i, 0.5, test_molding_path, test_leadframe_path)
 
-    test_molding = list_png_images(test_molding_path)
+    test_molding = list_png_images(test_molding_path,  train=False, labels= test_labels)
     test_molding.to_csv('./datas/test_molding.csv', index=False)
 
-    test_leadframe = list_png_images(test_leadframe_path)
+    test_leadframe = list_png_images(test_leadframe_path,  train=False, labels= test_labels)
     test_leadframe.to_csv('./datas/test_leadframe.csv', index=False)
