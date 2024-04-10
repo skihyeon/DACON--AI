@@ -169,7 +169,7 @@ def main():
     update_wandb_config(wandb, config)
 
     
-    for mode in ['molding', 'leadframe']:
+    for mode in ['leadframe', 'molding']:
         train_model(mode, config, wandb)
     wandb.finish()
 
